@@ -10,11 +10,12 @@ df = pd.read_csv('creative_summary.csv')
 df2 = pd.read_csv('input.csv')
 
 df['area'] = df['width'] * df['height']
+df2['area'] = df2['width'] * df2['height']
 
 # df2 = pd.read_csv('input.csv') # Comentado si no lo usas
 features = [
-    'total_days_active', # 🚨 Cuidado: Data leakage
-    'total_spend_usd',   # 🚨 Cuidado: Data leakage
+    'total_days_active',
+    'total_spend_usd',
     'area',
     'duration_sec',
     'text_density',
@@ -42,47 +43,66 @@ categorical_features = [
     'has_ugc_style'  
 ]
 
-target = 'perf_score'
-
+# Preparamos la X principal
 X = df[features + categorical_features]
-y = df[target]
-
-# 4. Hot-Encoding
 X_encoded = pd.get_dummies(X, columns=categorical_features, drop_first=False)
 
-# 4. Dividir los datos en conjunto de Entrenamiento (80%) y Prueba (20%)
-X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.2, random_state=42)
+# Preparamos el input final para predicciones
+X_input_raw = df2[features + categorical_features]
+X_input_encoded = pd.get_dummies(X_input_raw, columns=categorical_features)
+X_input_final = X_input_encoded.reindex(columns=X_encoded.columns, fill_value=0)
 
-# 5. Inicializar y configurar el modelo XGBoost
-modelo_xgb = xgb.XGBRegressor(
-    objective='reg:squarederror', 
-    n_estimators=100,             
-    learning_rate=0.1,            
-    max_depth=5,                  
-    random_state=42,
-    n_jobs=-1
-)
+# 2. LISTA DE TARGETS
+targets = ['perf_score', 'overall_ctr', 'overall_cvr', 'overall_ipm']
 
-# Model training
-modelo_xgb.fit(X_train, y_train)
+# Diccionario para guardar las predicciones finales
+predicciones_finales = {}
 
-# Evaluate de model
-predicciones = modelo_xgb.predict(X_test)
-error = mean_squared_error(y_test, predicciones)
+print("Iniciando entrenamiento múltiple...\n" + "="*40)
 
-print(f"Error Cuadrático Medio (MSE) en prueba: {error:.9f}")
+# 3. EL BUCLE MÁGICO: Un modelo por cada target
+for target in targets:
+    print(f"🎯 ENTRENANDO MODELO PARA: {target.upper()}")
+    
+    y = df[target]
+    
+    # Dividir datos (usamos la misma semilla para que sea justo)
+    X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.2, random_state=42)
+    
+    # Inicializar modelo
+    modelo_xgb = xgb.XGBRegressor(
+        objective='reg:squarederror', 
+        n_estimators=100,             
+        learning_rate=0.1,            
+        max_depth=5,                  
+        random_state=42,
+        n_jobs=-1
+    )
+    
+    # Entrenar
+    modelo_xgb.fit(X_train, y_train)
+    
+    # Evaluar
+    predicciones = modelo_xgb.predict(X_test)
+    error = mean_squared_error(y_test, predicciones)
+    print(f"   > MSE en prueba: {error:.9f}")
+    
+    # Predecir sobre input.csv
+    pred_input = modelo_xgb.predict(X_input_final)
+    predicciones_finales[target] = pred_input[0]
+    print(f"   > Predicción para input: {pred_input[0]:.6f}\n")
 
-# ==============================================================================
-# ✨ LA NUEVA MAGIA: SEPARAR Y CREAR LOS DOS CSV ✨
-# ==============================================================================
+print("="*40)
+print("🚀 RESUMEN DE PREDICCIONES PARA EL INPUT:")
+for t, valor in predicciones_finales.items():
+    print(f" - {t}: {valor:.6f}")
 
-# 1. Obtenemos las importancias brutas
+
+#Analisis of the correlations of the model
 importancias_brutas = pd.DataFrame({
     'Columna_XGB': X_train.columns,
     'Importancia': modelo_xgb.feature_importances_
 })
-
-# 2. Calculamos las correlaciones
 correlaciones = X_train.apply(lambda col: col.corr(y_train))
 importancias_brutas['Correlacion'] = importancias_brutas['Columna_XGB'].map(correlaciones)
 
@@ -132,32 +152,7 @@ df_categoricas = importancias_brutas[importancias_brutas['Tipo'] == 'categorica'
 df_numericas.to_csv('importancia_features_numericas.csv', index=False)
 df_categoricas.to_csv('importancia_features_categoricas.csv', index=False)
 
-print("\n✅ ¡Archivos 'importancia_features_numericas.csv' e 'importancia_features_categoricas.csv' creados con éxito!")
-
-# ==============================================================================
-
-# PDP Múltiple
-X_train_float = X_train.astype(float)
-features_to_plot = features 
-
-print(f"\nGenerando {len(features_to_plot)} gráficos de dependencia parcial...")
-
-fig, ax = plt.subplots(figsize=(15, 12)) 
-
-display = PartialDependenceDisplay.from_estimator(
-    modelo_xgb, 
-    X_train_float, 
-    features=features_to_plot, 
-    ax=ax,
-    grid_resolution=50,
-    n_cols=4  
-)
-
-plt.suptitle('Análisis de Dependencia Parcial: Impacto de las variables en Perf_Score', fontsize=16)
-plt.subplots_adjust(top=0.92, hspace=0.4, wspace=0.3)
-
-# Ojo: esto secuestrará tu terminal. Si prefieres guardarlo, cambia show() por savefig()
-plt.show()
+print("¡Archivos 'importancia_features_numericas.csv' e 'importancia_features_categoricas.csv' creados con éxito!")
 
 def calidad():
     
