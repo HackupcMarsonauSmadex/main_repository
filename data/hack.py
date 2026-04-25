@@ -2,39 +2,35 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
-from sklearn.preprocessing import OneHotEncoder
-import matplotlib.pyplot as plt
-from sklearn.inspection import PartialDependenceDisplay
 import numpy as np
 
-# 1. Carga de datos
-df = pd.read_csv('creative_summary.csv')
-df2 = pd.read_csv('input_campaign.csv')
-df3 = pd.read_csv('input_creatives.csv')
+# ==============================================================================
+# 1. CARGA DE DATOS
+# ==============================================================================
+df = pd.read_csv('creative_summary.csv')      # Histórico para entrenar
+df2 = pd.read_csv('input_campaign.csv')       # Datos de la campaña (KPI)
+df3 = pd.read_csv('input_creatives.csv')      # Nuevos creativos a evaluar
 
-# ✨ CÁLCULO DE MÉTRICAS DERIVADAS (Área y CPA)
+# ==============================================================================
+# ✨ CÁLCULO DE MÉTRICAS DERIVADAS
+# ==============================================================================
 # Área geométrica
 df['area'] = df['width'] * df['height']
-df2['area'] = df2['width'] * df2['height']
+df3['area'] = df3['width'] * df3['height']
 
-# Cálculo del CPA (Cost Per Action) = Gasto / Conversiones
-# Usamos np.where para evitar el error de "división por cero" si no hay conversiones
+# Cálculo del CPA histórico (evitando división por cero)
 df['overall_cpa'] = np.where(
     df['total_conversions'] > 0, 
     df['total_spend_usd'] / df['total_conversions'], 
     0
 )
 
-# 2. DEFINICIÓN DE ATRIBUTOS (Features)
+# ==============================================================================
+# 2. DEFINICIÓN Y PREPARACIÓN DE ATRIBUTOS
+# ==============================================================================
 features = [
-    'total_days_active',
-    'total_spend_usd',
-    'area',
-    'duration_sec',
-    'text_density',
-    'copy_length_chars',
-    'faces_count',
-    'product_count'     
+    'total_days_active', 'total_spend_usd', 'area', 'duration_sec',
+    'text_density', 'copy_length_chars', 'faces_count', 'product_count'    
 ]
 
 categorical_features = [
@@ -43,18 +39,18 @@ categorical_features = [
     'subhead', 'has_price', 'has_discount_badge', 'has_gameplay', 'has_ugc_style'  
 ]
 
-# Preparamos la X principal
+# Preparamos la X principal (Datos de entrenamiento)
 X = df[features + categorical_features]
 X_encoded = pd.get_dummies(X, columns=categorical_features, drop_first=False)
 
-# Preparamos el input final para predicciones
-X_input_raw = df2[features + categorical_features]
-X_input_encoded = pd.get_dummies(X_input_raw, columns=categorical_features)
-X_input_final = X_input_encoded.reindex(columns=X_encoded.columns, fill_value=0)
+# 🔥 CORRECCIÓN: Convertimos todo a numérico para evitar el error de XGBoost
+X_encoded = X_encoded.astype(float)
 
+# ==============================================================================
+# 3. IDENTIFICAR EL KPI DE LA CAMPAÑA
+# ==============================================================================
 kpi_solicitado = df2['kpi_goal'].iloc[0]
 
-# Diccionario de traducción (Perf Score eliminado)
 mapa_targets = {
     'CTR': 'overall_ctr',
     'CVR': 'overall_cvr',
@@ -62,20 +58,17 @@ mapa_targets = {
     'ROAS': 'overall_roas',
     'CPA': 'overall_cpa'
 }
-
-# Obtenemos el nombre real de la columna a predecir
 target_final = mapa_targets.get(kpi_solicitado)
 
-print(f"🎯 CAMPAÑA DETECTADA: {id_campaña}")
 print(f"🎯 KPI A OPTIMIZAR: {kpi_solicitado} (Columna: {target_final})")
 
-# Asignamos 'y' solo a la métrica que nos interesa
+# ==============================================================================
+# 4. ENTRENAMIENTO DEL MODELO
+# ==============================================================================
 y = df[target_final]
 
-# Dividir datos
 X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.2, random_state=42)
 
-# Inicializar modelo
 modelo_xgb = xgb.XGBRegressor(
     objective='reg:squarederror', 
     n_estimators=100,             
@@ -85,31 +78,47 @@ modelo_xgb = xgb.XGBRegressor(
     n_jobs=-1
 )
 
-# Entrenar
 modelo_xgb.fit(X_train, y_train)
-
-# Evaluar
-predicciones = modelo_xgb.predict(X_test)
-error = mean_squared_error(y_test, predicciones)
+predicciones_prueba = modelo_xgb.predict(X_test)
+error = mean_squared_error(y_test, predicciones_prueba)
 print(f" > MSE en prueba: {error:.9f}")
 
-
-# Predecir sobre input.csv
-#pred_input = modelo_xgb.predict(X_input_final)
-#print(f" - {kpi_solicitado} estimado: {pred_input[0]:.6f}")
-
-# Calculamos las importancias del modelo
+# ==============================================================================
+# 5. EXPORTAR IMPORTANCIAS Y CORRELACIONES
+# ==============================================================================
 importancias_brutas = pd.DataFrame({
     'Columna_XGB': X_train.columns,
     'Importancia': modelo_xgb.feature_importances_
 })
 
-# Calculamos las correlaciones directas con el target seleccionado
 correlaciones = X_train.apply(lambda col: col.corr(y_train))
 importancias_brutas['Correlacion'] = importancias_brutas['Columna_XGB'].map(correlaciones)
-
-# Ordenamos por importancia (de mayor a menor)
 importancias_brutas = importancias_brutas.sort_values(by='Importancia', ascending=False)
 
-# Guardamos el archivo CSV con el nombre del KPI analizado
 importancias_brutas.to_csv('Import_Corr.csv', index=False)
+print("✅ Archivo 'Import_Corr.csv' generado con éxito.")
+
+# ==============================================================================
+# 6. ANÁLISIS DE NUEVOS CREATIVOS (df3) Y PREDICCIÓN
+# ==============================================================================
+# Extraemos atributos del archivo de creativos
+X_input_raw = df3[features + categorical_features]
+X_input_encoded = pd.get_dummies(X_input_raw, columns=categorical_features)
+
+# Alineamos las columnas con las de entrenamiento (rellenando con 1 lo que falte)
+X_input_final = X_input_encoded.reindex(columns=X_encoded.columns, fill_value=1)
+
+# 🔥 CORRECCIÓN: Aseguramos que todo sea numérico antes de predecir
+X_input_final = X_input_final.astype(float)
+
+# Hacemos la predicción sobre los nuevos creativos
+pred_input = modelo_xgb.predict(X_input_final)
+
+# Guardamos la predicción en el propio dataframe por si quieres usarlo
+df3[f'Prediccion_{kpi_solicitado}'] = pred_input
+
+print("\n" + "="*40)
+print("🚀 PREDICCIONES PARA LOS NUEVOS CREATIVOS:")
+for index, pred in enumerate(pred_input):
+    print(f" - Creativo {index + 1}: {kpi_solicitado} estimado = {pred:.6f}")
+print("="*40)
