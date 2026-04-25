@@ -105,20 +105,29 @@ print("✅ Archivo 'Import_Corr.csv' generado con éxito.")
 X_input_raw = df3[features + categorical_features]
 X_input_encoded = pd.get_dummies(X_input_raw, columns=categorical_features)
 
-# Alineamos las columnas con las de entrenamiento (rellenando con 1 lo que falte)
+#Rellenar valores faltantes
 X_input_final = X_input_encoded.reindex(columns=X_encoded.columns, fill_value=1)
-
-# 🔥 CORRECCIÓN: Aseguramos que todo sea numérico antes de predecir
-X_input_final = X_input_final.astype(float)
+X_input_final = X_input_final.fillna(1)
 
 # Hacemos la predicción sobre los nuevos creativos
 pred_input = modelo_xgb.predict(X_input_final)
 
-# Guardamos la predicción en el propio dataframe por si quieres usarlo
-df3[f'Prediccion_{kpi_solicitado}'] = pred_input
+df3[features] = df3[features].fillna(1)
+# Rellenamos categóricos con "1" (o el valor que prefieras para indicar 'no definido')
+df3[categorical_features] = df3[categorical_features].fillna("1")
+
+# 2. Añadimos la columna de predicción
+nombre_columna_pred = f'Prediccion_{kpi_solicitado}'
+df3[nombre_columna_pred] = pred_input
+
+# 3. Guardamos el archivo final
+df3.to_csv('output_creatives.csv', index=False)
 
 print("\n" + "="*40)
-print("🚀 PREDICCIONES PARA LOS NUEVOS CREATIVOS:")
+print(f"✅ ¡PROCESO COMPLETADO!")
+print(f"📂 Archivo generado: 'output_creatives.csv'")
+print("-" * 40)
+print("🚀 PREDICCIONES:")
 for index, pred in enumerate(pred_input):
     print(f" - Creativo {index + 1}: {kpi_solicitado} estimado = {pred:.6f}")
 print("="*40)
