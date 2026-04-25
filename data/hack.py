@@ -5,17 +5,12 @@ from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import OneHotEncoder
 import matplotlib.pyplot as plt
 from sklearn.inspection import PartialDependenceDisplay
-
-import pandas as pd
 import numpy as np
-import xgboost as xgb
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
 
 # 1. Carga de datos
 df = pd.read_csv('creative_summary.csv')
-df2 = pd.read_csv('input.csv')
-df_campaigns = pd.read_csv('campaigns.csv')
+df2 = pd.read_csv('input_campaign.csv')
+df3 = pd.read_csv('input_creatives.csv')
 
 # ✨ CÁLCULO DE MÉTRICAS DERIVADAS (Área y CPA)
 # Área geométrica
@@ -29,14 +24,6 @@ df['overall_cpa'] = np.where(
     df['total_spend_usd'] / df['total_conversions'], 
     0
 )
-
-# Hacemos lo mismo para el input por si en el futuro lo usas como atributo
-if 'total_conversions' in df2.columns:
-    df2['overall_cpa'] = np.where(
-        df2['total_conversions'] > 0, 
-        df2['total_spend_usd'] / df2['total_conversions'], 
-        0
-    )
 
 # 2. DEFINICIÓN DE ATRIBUTOS (Features)
 features = [
@@ -65,8 +52,7 @@ X_input_raw = df2[features + categorical_features]
 X_input_encoded = pd.get_dummies(X_input_raw, columns=categorical_features)
 X_input_final = X_input_encoded.reindex(columns=X_encoded.columns, fill_value=0)
 
-id_campaña = df2['campaign_id'].iloc[0]
-kpi_solicitado = df_campaigns.loc[df_campaigns['campaign_id'] == id_campaña, 'kpi_goal'].values[0]
+kpi_solicitado = df2['kpi_goal'].iloc[0]
 
 # Diccionario de traducción (Perf Score eliminado)
 mapa_targets = {
@@ -107,53 +93,10 @@ predicciones = modelo_xgb.predict(X_test)
 error = mean_squared_error(y_test, predicciones)
 print(f" > MSE en prueba: {error:.9f}")
 
+
 # Predecir sobre input.csv
-pred_input = modelo_xgb.predict(X_input_final)
-
-print(f" - {kpi_solicitado} estimado: {pred_input[0]:.6f}")
-
-import pandas as pd
-import numpy as np
-import xgboost as xgb
-from sklearn.model_selection import train_test_split
-
-# 1. Carga y preparación (incluyendo el cálculo de CPA)
-df = pd.read_csv('creative_summary.csv')
-df2 = pd.read_csv('input.csv')
-df_campaigns = pd.read_csv('campaigns.csv')
-
-df['area'] = df['width'] * df['height']
-df2['area'] = df2['width'] * df2['height']
-
-# Calculamos CPA por si la campaña lo requiere
-df['overall_cpa'] = np.where(df['total_conversions'] > 0, df['total_spend_usd'] / df['total_conversions'], 0)
-
-# 2. Identificar el Target (KPI) según la campaña del input
-id_campaña = df2['campaign_id'].iloc[0]
-kpi_solicitado = df_campaigns.loc[df_campaigns['campaign_id'] == id_campaña, 'kpi_goal'].values[0]
-
-mapa_targets = {
-    'CTR': 'overall_ctr',
-    'CVR': 'overall_cvr',
-    'IPM': 'overall_ipm',
-    'ROAS': 'overall_roas',
-    'CPA': 'overall_cpa'
-}
-target_final = mapa_targets.get(kpi_solicitado)
-
-# 3. Preparación de X e y
-features = ['total_days_active', 'total_spend_usd', 'area', 'duration_sec', 'text_density', 'copy_length_chars', 'faces_count', 'product_count']
-categorical_features = ['vertical', 'format', 'language', 'theme', 'hook_type', 'dominant_color', 'emotional_tone', 'advertiser_name', 'app_name', 'cta_text', 'headline', 'subhead', 'has_price', 'has_discount_badge', 'has_gameplay', 'has_ugc_style']
-
-X = df[features + categorical_features]
-y = df[target_final]
-
-X_encoded = pd.get_dummies(X, columns=categorical_features, drop_first=False)
-X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.2, random_state=42)
-
-# 4. Entrenamiento del modelo
-modelo_xgb = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=100, random_state=42)
-modelo_xgb.fit(X_train, y_train)
+#pred_input = modelo_xgb.predict(X_input_final)
+#print(f" - {kpi_solicitado} estimado: {pred_input[0]:.6f}")
 
 # Calculamos las importancias del modelo
 importancias_brutas = pd.DataFrame({
