@@ -10,6 +10,7 @@ df = pd.read_csv('creative_summary.csv')
 
 df['area'] = df['width'] * df['height']
 
+df2 = pd.read_csv('input.csv')
 features = [
     'total_days_active',
     'total_spend_usd',
@@ -34,7 +35,7 @@ categorical_features = [
     'dominant_color',
     'emotional_tone',
     'advertiser_name', 
-    'app_name', 
+    'app_name',
     'cta_text',
     'headline',
     'subhead'
