@@ -87,19 +87,31 @@ importancias.to_csv('importancia_diseno_ctr.csv', index=False)
 print("\n--- Importancia y Dirección de los Parámetros ---")
 print(importancias.head(10))
 
-#Visualizar el efecto real de las variables críticas (PDP)
-print("\nGenerando gráficos de dependencia parcial...")
-features_to_plot = ['text_density'] 
-fig, ax = plt.subplots(figsize=(8, 6))
+# 1. Aseguramos que todos los datos de entrenamiento sean float para evitar errores
+X_train_float = X_train.astype(float)
 
+# 2. Definimos la lista de variables a graficar (tus features numéricas)
+# Nota: He quitado las que puedan ser binarias o constantes si prefieres, 
+# pero aquí están todas las de tu lista 'features'
+features_to_plot = features 
+
+print(f"\nGenerando {len(features_to_plot)} gráficos de dependencia parcial...")
+
+# 3. Configuramos el tamaño de la figura
+# Usamos una rejilla. Scikit-learn la gestiona automáticamente si le damos un tamaño grande.
+fig, ax = plt.subplots(figsize=(15, 12)) 
+
+# 4. Creamos el PDP múltiple
 display = PartialDependenceDisplay.from_estimator(
     modelo_xgb, 
-    X_train,
+    X_train_float, 
     features=features_to_plot, 
     ax=ax,
-    grid_resolution=50
+    grid_resolution=50,
+    n_cols=4  # Definimos 4 columnas de gráficos para que sea legible
 )
 
-plt.title('Efecto del Área del Anuncio en el Performance Score')
-plt.grid(True, linestyle='--', alpha=0.6)
+# Ajustes estéticos
+plt.suptitle('Análisis de Dependencia Parcial: Impacto de las variables en Perf_Score', fontsize=16)
+plt.subplots_adjust(top=0.92, hspace=0.4, wspace=0.3)
 plt.show()
