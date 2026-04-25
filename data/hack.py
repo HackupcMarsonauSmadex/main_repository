@@ -10,20 +10,16 @@ df = pd.read_csv('creative_summary.csv')
 
 df['area'] = df['width'] * df['height']
 
-df2 = pd.read_csv('input.csv')
+# df2 = pd.read_csv('input.csv') # Comentado si no lo usas
 features = [
-    'total_days_active',
-    'total_spend_usd',
+    'total_days_active', # 🚨 Cuidado: Data leakage
+    'total_spend_usd',   # 🚨 Cuidado: Data leakage
     'area',
     'duration_sec',
     'text_density',
     'copy_length_chars',
     'faces_count',
-    'product_count',
-    'has_price',          
-    'has_discount_badge', 
-    'has_gameplay',       
-    'has_ugc_style'       
+    'product_count'     
 ]
 
 categorical_features = [
@@ -38,7 +34,11 @@ categorical_features = [
     'app_name',
     'cta_text',
     'headline',
-    'subhead'
+    'subhead',
+    'has_price',          
+    'has_discount_badge', 
+    'has_gameplay',       
+    'has_ugc_style'  
 ]
 
 target = 'perf_score'
@@ -53,16 +53,16 @@ X_encoded = pd.get_dummies(X, columns=categorical_features, drop_first=False)
 X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.2, random_state=42)
 
 # 5. Inicializar y configurar el modelo XGBoost
-# Usamos XGBRegressor porque el CTR es un número continuo, no una categoría.
 modelo_xgb = xgb.XGBRegressor(
-    objective='reg:squarederror', # Función de pérdida estándar para regresión
-    n_estimators=100,             # Número de árboles
-    learning_rate=0.1,            # Tasa de aprendizaje
-    max_depth=5,                  # Profundidad de cada árbol
-    random_state=42
+    objective='reg:squarederror', 
+    n_estimators=100,             
+    learning_rate=0.1,            
+    max_depth=5,                  
+    random_state=42,
+    n_jobs=-1
 )
 
-#Model training
+# Model training
 modelo_xgb.fit(X_train, y_train)
 
 # Evaluate de model
@@ -71,50 +71,95 @@ error = mean_squared_error(y_test, predicciones)
 
 print(f"Error Cuadrático Medio (MSE) en prueba: {error:.9f}")
 
-# 8. Extraer qué parámetros de diseño son los más importantes
-importancias = pd.DataFrame({
-    'Atributo': X_train.columns,
+# ==============================================================================
+# ✨ LA NUEVA MAGIA: SEPARAR Y CREAR LOS DOS CSV ✨
+# ==============================================================================
+
+# 1. Obtenemos las importancias brutas
+importancias_brutas = pd.DataFrame({
+    'Columna_XGB': X_train.columns,
     'Importancia': modelo_xgb.feature_importances_
-}).sort_values(by='Importancia', ascending=False)
+})
 
-#Correlación
-# Calculamos la dirección (+ o -) usando la correlación lineal básica
+# 2. Calculamos las correlaciones
 correlaciones = X_train.apply(lambda col: col.corr(y_train))
-importancias['Correlacion'] = importancias['Atributo'].map(correlaciones)
-importancias = importancias.sort_values(by='Importancia', ascending=False)
+importancias_brutas['Correlacion'] = importancias_brutas['Columna_XGB'].map(correlaciones)
 
-importancias.to_csv('importancia_diseno_ctr.csv', index=False)
+# 3. Lógica para desempaquetar Nombre y Valor
+nombres = []
+valores = []
+tipos = [] # Para saber a qué CSV va
 
-print("\n--- Importancia y Dirección de los Parámetros ---")
-print(importancias.head(10))
+for col in importancias_brutas['Columna_XGB']:
+    es_categorica = False
+    
+    # Comprobamos si la columna viene de un One-Hot Encoding (ej. format_banner)
+    for cat in categorical_features:
+        if col.startswith(cat + '_'):
+            nombres.append(cat)
+            # Quitamos el prefijo (ej. 'format_') para quedarnos solo con 'banner'
+            valores.append(col.replace(cat + '_', '', 1)) 
+            tipos.append('categorica')
+            es_categorica = True
+            break
+            
+    # Si no es categórica, comprobamos si es numérica
+    if not es_categorica:
+        if col in features:
+            nombres.append(col)
+            valores.append('-') # Los valores numéricos no tienen categoría
+            tipos.append('numerica')
+        else:
+            nombres.append(col)
+            valores.append('-')
+            tipos.append('desconocido')
 
-# 1. Aseguramos que todos los datos de entrenamiento sean float para evitar errores
+# 4. Asignamos las nuevas columnas al DataFrame
+importancias_brutas['Nombre del atributo'] = nombres
+importancias_brutas['Valor del atributo'] = valores
+importancias_brutas['Tipo'] = tipos
+
+# 5. Ordenamos por importancia y filtramos solo las columnas que quieres
+importancias_brutas = importancias_brutas.sort_values(by='Importancia', ascending=False)
+columnas_exportar = ['Nombre del atributo', 'Valor del atributo', 'Importancia', 'Correlacion']
+
+# 6. Partimos en dos DataFrames distintos
+df_numericas = importancias_brutas[importancias_brutas['Tipo'] == 'numerica'][columnas_exportar]
+df_categoricas = importancias_brutas[importancias_brutas['Tipo'] == 'categorica'][columnas_exportar]
+
+# 7. Guardamos los dos CSV
+df_numericas.to_csv('importancia_features_numericas.csv', index=False)
+df_categoricas.to_csv('importancia_features_categoricas.csv', index=False)
+
+print("\n✅ ¡Archivos 'importancia_features_numericas.csv' e 'importancia_features_categoricas.csv' creados con éxito!")
+
+# ==============================================================================
+
+# PDP Múltiple
 X_train_float = X_train.astype(float)
-
-# 2. Definimos la lista de variables a graficar (tus features numéricas)
-# Nota: He quitado las que puedan ser binarias o constantes si prefieres, 
-# pero aquí están todas las de tu lista 'features'
 features_to_plot = features 
 
 print(f"\nGenerando {len(features_to_plot)} gráficos de dependencia parcial...")
 
-# 3. Configuramos el tamaño de la figura
-# Usamos una rejilla. Scikit-learn la gestiona automáticamente si le damos un tamaño grande.
 fig, ax = plt.subplots(figsize=(15, 12)) 
 
-# 4. Creamos el PDP múltiple
 display = PartialDependenceDisplay.from_estimator(
     modelo_xgb, 
     X_train_float, 
     features=features_to_plot, 
     ax=ax,
     grid_resolution=50,
-    n_cols=4  # Definimos 4 columnas de gráficos para que sea legible
+    n_cols=4  
 )
 
-# Ajustes estéticos
 plt.suptitle('Análisis de Dependencia Parcial: Impacto de las variables en Perf_Score', fontsize=16)
 plt.subplots_adjust(top=0.92, hspace=0.4, wspace=0.3)
+
+# Ojo: esto secuestrará tu terminal. Si prefieres guardarlo, cambia show() por savefig()
 plt.show()
 
-#Cambio
+def calidad():
+    
+    return 
+
+Q = calidad()
