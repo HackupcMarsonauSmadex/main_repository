@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from sklearn.inspection import PartialDependenceDisplay
 
 df = pd.read_csv('creative_summary.csv')
+df2 = pd.read_csv('input.csv')
 
 df['area'] = df['width'] * df['height']
 
