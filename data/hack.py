@@ -6,13 +6,14 @@ from sklearn.preprocessing import OneHotEncoder
 import matplotlib.pyplot as plt
 from sklearn.inspection import PartialDependenceDisplay
 
+# 1. Carga de datos
 df = pd.read_csv('creative_summary.csv')
 df2 = pd.read_csv('input.csv')
+df_campaigns = pd.read_csv('campaigns.csv')
 
 df['area'] = df['width'] * df['height']
 df2['area'] = df2['width'] * df2['height']
 
-# df2 = pd.read_csv('input.csv') # Comentado si no lo usas
 features = [
     'total_days_active',
     'total_spend_usd',
@@ -25,22 +26,9 @@ features = [
 ]
 
 categorical_features = [
-    'vertical',
-    'format',
-    'language',
-    'theme',
-    'hook_type',
-    'dominant_color',
-    'emotional_tone',
-    'advertiser_name', 
-    'app_name',
-    'cta_text',
-    'headline',
-    'subhead',
-    'has_price',          
-    'has_discount_badge', 
-    'has_gameplay',       
-    'has_ugc_style'  
+    'vertical', 'format', 'language', 'theme', 'hook_type', 'dominant_color',
+    'emotional_tone', 'advertiser_name', 'app_name', 'cta_text', 'headline',
+    'subhead', 'has_price', 'has_discount_badge', 'has_gameplay', 'has_ugc_style'  
 ]
 
 # Preparamos la X principal
@@ -52,50 +40,70 @@ X_input_raw = df2[features + categorical_features]
 X_input_encoded = pd.get_dummies(X_input_raw, columns=categorical_features)
 X_input_final = X_input_encoded.reindex(columns=X_encoded.columns, fill_value=0)
 
-# 2. LISTA DE TARGETS
-targets = ['perf_score', 'overall_ctr', 'overall_cvr', 'overall_ipm']
 
-# Diccionario para guardar las predicciones finales
-predicciones_finales = {}
+# ==============================================================================
+# ✨ NUEVA LÓGICA: IDENTIFICAR EL OBJETIVO ÚNICO
+# ==============================================================================
 
-print("Iniciando entrenamiento múltiple...\n" + "="*40)
+# 1. Sacamos el ID del anuncio a evaluar
+id_campaña = df2['campaign_id'].iloc[0]
 
-# 3. EL BUCLE MÁGICO: Un modelo por cada target
-for target in targets:
-    print(f"🎯 ENTRENANDO MODELO PARA: {target.upper()}")
-    
-    y = df[target]
-    
-    # Dividir datos (usamos la misma semilla para que sea justo)
-    X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.2, random_state=42)
-    
-    # Inicializar modelo
-    modelo_xgb = xgb.XGBRegressor(
-        objective='reg:squarederror', 
-        n_estimators=100,             
-        learning_rate=0.1,            
-        max_depth=5,                  
-        random_state=42,
-        n_jobs=-1
-    )
-    
-    # Entrenar
-    modelo_xgb.fit(X_train, y_train)
-    
-    # Evaluar
-    predicciones = modelo_xgb.predict(X_test)
-    error = mean_squared_error(y_test, predicciones)
-    print(f"   > MSE en prueba: {error:.9f}")
-    
-    # Predecir sobre input.csv
-    pred_input = modelo_xgb.predict(X_input_final)
-    predicciones_finales[target] = pred_input[0]
-    print(f"   > Predicción para input: {pred_input[0]:.6f}\n")
+# 2. Buscamos ese ID en el archivo de campañas y sacamos su kpi_goal
+kpi_solicitado = df_campaigns.loc[df_campaigns['campaign_id'] == id_campaña, 'kpi_goal'].values[0]
+
+# 3. Diccionario traductor (de lo que dice la campaña a tu columna del CSV)
+mapa_targets = {
+    'CTR': 'overall_ctr',
+    'CVR': 'overall_cvr',
+    'IPM': 'overall_ipm',
+    'ROAS': 'overall_roas',
+    'Perf Score': 'perf_score'
+}
+
+# 4. Obtenemos el nombre real de la columna a predecir
+target_final = mapa_targets.get(kpi_solicitado)
 
 print("="*40)
-print("🚀 RESUMEN DE PREDICCIONES PARA EL INPUT:")
-for t, valor in predicciones_finales.items():
-    print(f" - {t}: {valor:.6f}")
+print(f"🎯 CAMPAÑA DETECTADA: {id_campaña}")
+print(f"🎯 KPI A OPTIMIZAR: {kpi_solicitado} (Columna: {target_final})")
+print("="*40)
+
+# ==============================================================================
+# ENTRENAMIENTO Y PREDICCIÓN (SOLO UNA VEZ)
+# ==============================================================================
+
+# Asignamos 'y' solo a la métrica que nos interesa
+y = df[target_final]
+
+# Dividir datos
+X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.2, random_state=42)
+
+# Inicializar modelo
+modelo_xgb = xgb.XGBRegressor(
+    objective='reg:squarederror', 
+    n_estimators=100,             
+    learning_rate=0.1,            
+    max_depth=5,                  
+    random_state=42,
+    n_jobs=-1
+)
+
+# Entrenar
+print("Entrenando modelo especialista...")
+modelo_xgb.fit(X_train, y_train)
+
+# Evaluar
+predicciones = modelo_xgb.predict(X_test)
+error = mean_squared_error(y_test, predicciones)
+print(f" > MSE en prueba: {error:.9f}")
+
+# Predecir sobre input.csv
+pred_input = modelo_xgb.predict(X_input_final)
+
+print("\n" + "="*40)
+print("🚀 RESULTADO DE LA PREDICCIÓN:")
+print(f" - {kpi_solicitado} estimado: {pred_input[0]:.6f}")
+print("="*40)
 
 
 #Analisis of the correlations of the model
