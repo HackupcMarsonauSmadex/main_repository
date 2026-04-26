@@ -3,13 +3,14 @@ import pandas as pd
 import json
 import os
 from src.gemini_ai_service import analyze_full_campaign
-from data.hack import run_xgboost_pipeline, FEATURES, CATEGORICAL_FEATURES
+from src.hack_en import run_xgboost_pipeline, FEATURES, CATEGORICAL_FEATURES, COLS_HAS
 
 def render_chatbot():
     # 1. Configuració inicial i rutes
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     CONFIG_PATH = os.path.join(BASE_DIR, 'src', 'utils', 'ranges.json')
     HISTORIC_PATH = os.path.join(BASE_DIR, 'data', 'creative_summary.csv')
+    DAILY_PATH    = os.path.join(BASE_DIR, 'data', 'creative_daily_country_os_stats.csv')
 
     with open(CONFIG_PATH, 'r') as f:
         config = json.load(f)
@@ -150,16 +151,23 @@ def render_chatbot():
             with st.spinner("⚙️ Entrenant model XGBoost i optimitzant creativitats..."):
                 try:
                     df_historic = pd.read_csv(HISTORIC_PATH)
-                    df_orig, df_opt, importancias, kpi, mse = run_xgboost_pipeline(
+                    df_daily = pd.read_csv(DAILY_PATH) if os.path.exists(DAILY_PATH) else None
+
+                    if df_daily is None:
+                        st.warning("⚠️ No s'ha trobat `creative_daily_country_os_stats.csv`. El mòdul de fatiga no s'activarà.")
+
+                    df_orig, df_opt, importancias, kpi, mse_kpi, mse_fatigue = run_xgboost_pipeline(
                         campaign_data=st.session_state.full_data['campaign'],
                         creatives_data=st.session_state.full_data['creatives'],
-                        df_historic=df_historic
+                        df_historic=df_historic,
+                        df_daily=df_daily
                     )
                     st.session_state.df_original    = df_orig
                     st.session_state.df_optimitzat  = df_opt
                     st.session_state.importancias   = importancias
                     st.session_state.kpi_optimitzat = kpi
-                    st.session_state.mse_model      = mse
+                    st.session_state.mse_model      = mse_kpi
+                    st.session_state.mse_fatigue    = mse_fatigue
                     st.session_state.step           = 'RESULTS'
                     st.rerun()
                 except Exception as e:
@@ -169,27 +177,38 @@ def render_chatbot():
             st.session_state.step = 'CHAT'
             st.rerun()
 
-    # ==========================================================================
-    # PAS 4: COMPARACIÓ I EXPLICACIÓ DE CANVIS (NOU)
-    # ==========================================================================
     elif st.session_state.step == 'RESULTS':
-        kpi   = st.session_state.kpi_optimitzat
-        df_or = st.session_state.df_original
-        df_op = st.session_state.df_optimitzat
-        imp   = st.session_state.importancias
-        mse   = st.session_state.mse_model
+        kpi        = st.session_state.kpi_optimitzat
+        df_or      = st.session_state.df_original
+        df_op      = st.session_state.df_optimitzat
+        imp        = st.session_state.importancias
+        mse_kpi    = st.session_state.mse_model
+        mse_fat    = st.session_state.mse_fatigue
+
+        has_fatigue = 'Prediction_Days_to_Fatigue' in df_op.columns
 
         st.title(f"✨ Optimització per {kpi}")
-        st.caption(f"Model XGBoost — MSE d'entrenament: `{mse:.6f}`")
+
+        # MSE info
+        mse_cols = st.columns(2)
+        mse_cols[0].caption(f"📉 KPI Model MSE: `{mse_kpi:.6f}`")
+        if mse_fat is not None:
+            mse_cols[1].caption(f"⏳ Fatigue Model MSE: `{mse_fat:.4f}`")
 
         # --- MÈTRIQUES GLOBALS ---
-        pred_col = f'Prediccio_{kpi}'
+        pred_col = f'Prediction_{kpi}'
         preds = df_op[pred_col]
 
-        m1, m2, m3 = st.columns(3)
+        if has_fatigue:
+            m1, m2, m3, m4 = st.columns(4)
+            fat_preds = df_op['Prediction_Days_to_Fatigue']
+            m4.metric("⏳ Fatiga Mitjana", f"{fat_preds.mean():.0f} dies")
+        else:
+            m1, m2, m3 = st.columns(3)
+
         m1.metric("KPI Objectiu", kpi)
-        m2.metric(f"{kpi} Mig Predit", f"{preds.mean():.4f}")
-        m3.metric(f"Millor Creatiu", f"Slot {preds.idxmax() + 1} → {preds.max():.4f}")
+        m2.metric(f"{kpi} Mitjà Predit", f"{preds.mean():.4f}")
+        m3.metric("🏆 Millor Slot", f"Slot {preds.idxmax() + 1} → {preds.max():.4f}")
 
         st.divider()
 
@@ -201,25 +220,28 @@ def render_chatbot():
 
         for i in range(len(df_or)):
             pred_val = df_op[pred_col].iloc[i]
-            with st.expander(f"**Slot {i+1}** — {kpi} predit: `{pred_val:.4f}`", expanded=(i == preds.idxmax())):
+            fat_label = f" | ⏳ Fatiga: {df_op['Prediction_Days_to_Fatigue'].iloc[i]} dies" if has_fatigue else ""
+            with st.expander(
+                f"**Slot {i+1}** — {kpi} predit: `{pred_val:.4f}`{fat_label}",
+                expanded=(i == preds.idxmax())
+            ):
                 rows = []
                 for col in all_cols:
                     val_orig = df_or[col].iloc[i] if col in df_or.columns else None
                     val_opt  = df_op[col].iloc[i]  if col in df_op.columns  else None
 
-                    # Detectem si ha canviat (camp imputat)
                     was_null = pd.isna(val_orig) or val_orig is None or str(val_orig).strip() == ''
                     changed  = was_null and not pd.isna(val_opt)
 
                     rows.append({
-                        "Atribut": col,
-                        "Valor Original": "—" if was_null else str(val_orig),
-                        "Valor Optimitzat": str(val_opt),
-                        "Canvi IA": "🟡 Imputat" if changed else "✅ Mantingut"
+                        "Atribut":           col,
+                        "Valor Original":    "—" if was_null else str(val_orig),
+                        "Valor Optimitzat":  str(val_opt),
+                        "Canvi IA":          "🟡 Imputat" if changed else "✅ Mantingut"
                     })
 
                 df_comp = pd.DataFrame(rows)
-                # Highlight de files canviades
+
                 def highlight_row(row):
                     if row['Canvi IA'] == '🟡 Imputat':
                         return ['background-color: #fff8e1'] * len(row)
@@ -236,11 +258,12 @@ def render_chatbot():
         # --- TOP ATRIBUTS MÉS INFLUENTS ---
         st.subheader("📊 Top 10 Atributs més Influents")
         top_imp = imp.head(10).copy()
-        top_imp['Direcció'] = top_imp['Correlacion'].apply(
+        # Columnes en anglès (nom actualitzat del service)
+        top_imp['Direction'] = top_imp['Correlation'].apply(
             lambda c: "⬆️ Augmenta KPI" if c > 0 else "⬇️ Redueix KPI"
         )
         st.dataframe(
-            top_imp[['Columna_XGB', 'Importancia', 'Correlacion', 'Direcció']],
+            top_imp[['XGB_Column', 'Importance', 'Correlation', 'Direction']],
             use_container_width=True,
             hide_index=True
         )
@@ -254,13 +277,13 @@ def render_chatbot():
         c1.download_button(
             "📄 Creatius Originals",
             df_or.to_csv(index=False),
-            "creatius_originals.csv",
+            "creatives_original.csv",
             use_container_width=True
         )
         c2.download_button(
             "✨ Creatius Optimitzats",
             df_op.to_csv(index=False),
-            "creatius_optimitzats.csv",
+            "output_creatives.csv",
             use_container_width=True
         )
         c3.download_button(
@@ -271,7 +294,8 @@ def render_chatbot():
         )
 
         if c4.button("⬅️ Tornar a l'Inici", use_container_width=True):
-            for key in ['df_original', 'df_optimitzat', 'importancias', 'kpi_optimitzat', 'mse_model', 'full_data', 'avis_borrat']:
+            for key in ['df_original', 'df_optimitzat', 'importancias', 'kpi_optimitzat',
+                        'mse_model', 'mse_fatigue', 'full_data', 'avis_borrat']:
                 st.session_state.pop(key, None)
             st.session_state.step = 'CHAT'
             st.rerun()
