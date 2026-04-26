@@ -1,0 +1,7 @@
+total_days_active,total_spend_usd,width,height,duration_sec,text_density,copy_length_chars,faces_count,product_count,vertical,format,language,theme,hook_type,dominant_color,emotional_tone,advertiser_name,app_name,cta_text,headline,subhead,has_price,has_discount_badge,has_gameplay,has_ugc_style
+14,500.50,1080,1920,,0.15,120,2,1,gaming,video,en,action,gameplay,red,excited,PixelForge,PixelForge Legends,Play Now,Epic Battles,,True,False,True,False
+,1200.00,1080,1080,30,,85,1,2,gaming,image,en,fantasy,character,blue,mysterious,PixelForge,PixelForge Legends,Install,Join the Quest,Free to play,,False,False,False
+7,300.00,720,1280,15,0.05,50,,1,gaming,video,es,,challenge,,funny,PixelForge,PixelForge Legends,Download,¿Aceptas el reto?,Solo para valientes,False,False,True,True
+21,,1080,1920,45,0.20,,0,3,gaming,video,en,strategy,,green,tense,PixelForge,PixelForge Legends,Play Free,Build your empire,Dominate the world,False,True,True,False
+3,150.75,1080,1080,10,0.10,40,1,,,image,es,action,story,black,,PixelForge,PixelForge Legends,Jugar,Acción sin límite,Mejor juego 2026,True,True,False,False
+10,800.00,,,60,0.30,200,3,0,gaming,video,,puzzle,gameplay,yellow,happy,PixelForge,PixelForge Legends,,Solve this!,Can you beat level 10?,False,False,True,True

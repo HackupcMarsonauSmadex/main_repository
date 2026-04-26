@@ -1,0 +1,13 @@
+# Interfície i Servidor
+streamlit
+
+# Processament de Dades i Machine Learning
+pandas
+numpy
+xgboost
+scikit-learn
+
+# IA i Generació de Contingut
+google-genai
+pillow
+python-dotenv
