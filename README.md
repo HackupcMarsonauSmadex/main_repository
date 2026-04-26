@@ -56,6 +56,14 @@ main_repository/
 
 1. **Clone the repository**
 
+2. **Create your virtual environment**
+
+```python3 -m venv venv```
+
+3. **Start your environment**
+
+```source venv/bin/activate```
+
 2. **Install dependencies:**
 
 ```bash
@@ -67,6 +75,7 @@ pip install -r requirements.txt
 ```
 GEMINI_API_TOKEN=your_api_key_here
 ```
+You can generate this API key in [here](https://aistudio.google.com/welcome?utm_source=google&utm_medium=cpc&utm_campaign=Cloud-SS-DR-AIS-FY26-global-gsem-1713578&utm_content=text-ad&utm_term=KW_api%20key%20gemini&gclsrc=aw.ds&gad_source=1&gad_campaignid=23417416058&gclid=CjwKCAjwzLHPBhBTEiwABaLsSlkfoXigZmIBUUNFW7BQvjcunHqnjPjYZv-u8CeibpMrcJj3N_kqgBoCSDgQAvD_BwE)
 
 ---
 
