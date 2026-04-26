@@ -30,7 +30,7 @@ if st.session_state.page == 'HOME':
         - Data-driven insights
         """)
         
-        st.info("Begin by clicking the button below to start analyzing your campaigns.")
+        st.info("Begin by clicking the button to start analyzing your campaigns.")
         
     with col2:
         st.markdown("")
