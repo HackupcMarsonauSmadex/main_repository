@@ -3,16 +3,17 @@ import pandas as pd
 import json
 import os
 from src.gemini_ai_service import analyze_full_campaign
+from data.hack import run_xgboost_pipeline, FEATURES, CATEGORICAL_FEATURES
 
 def render_chatbot():
     # 1. Configuració inicial i rutes
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     CONFIG_PATH = os.path.join(BASE_DIR, 'src', 'utils', 'ranges.json')
-    
+    HISTORIC_PATH = os.path.join(BASE_DIR, 'data', 'creative_summary.csv')
+
     with open(CONFIG_PATH, 'r') as f:
         config = json.load(f)
 
-    # Definició de KPIs
     kpi_details = {
         "CPA": "🎯 **Cost Per Action**: Pagues per venda/registre.",
         "ROAS": "💰 **Return on Ad Spend**: Retorn econòmic de la inversió.",
@@ -24,11 +25,13 @@ def render_chatbot():
     if 'step' not in st.session_state:
         st.session_state.step = 'CHAT'
 
+    # ==========================================================================
+    # PAS 1: FORMULARI D'ENTRADA
+    # ==========================================================================
     if st.session_state.step == 'CHAT':
         st.title("🚀 Smadex Smart Auditor")
         st.caption("Eina professional d'extracció i auditoria de campanyes AdTech.")
-        
-        # --- SECCIÓ 1: CAMPANYA ---
+
         with st.container(border=True):
             st.subheader("📋 Configuració Global")
             campaign_desc = st.text_area(
@@ -37,30 +40,23 @@ def render_chatbot():
                 height=100,
                 label_visibility="collapsed"
             )
-            
             col_kpi, col_info = st.columns([1, 1])
-            
             with col_kpi:
-                # FIX #1: kpi_goals és un dict, usem les claus explícitament
                 kpi_choice = st.selectbox(
                     "🎯 Escull el KPI objectiu:",
                     options=list(config['kpi_goals'].keys()),
                     index=None,
                     placeholder="Selecciona mètrica..."
                 )
-            
             with col_info:
                 with st.expander("❓ Què hauria d'escollir?"):
                     for k, v in kpi_details.items():
                         st.markdown(f"- {v}")
 
         st.markdown("---")
-
-        # --- SECCIÓ 2: CREATIVES (HORITZONTALS) ---
         st.subheader("🖼️ Slots de Creativitats")
-        
+
         c_texts, c_files = [], []
-        
         row1 = st.columns(3)
         for i in range(3):
             with row1[i]:
@@ -78,15 +74,14 @@ def render_chatbot():
                     c_files.append(st.file_uploader(f"Imatge {i+1}", key=f"f{i}", label_visibility="collapsed"))
 
         st.markdown("###")
-        
+
         if st.button("🚀 ANALITZAR CAMPANYA", use_container_width=True, type="primary"):
             if not campaign_desc or kpi_choice is None:
                 st.error("Si us plau, omple la descripció i el KPI.")
             else:
-                with st.spinner("Auditant coherència..."):
+                with st.spinner("🤖 Extraient dades amb Gemini..."):
                     res, avis_b = analyze_full_campaign(campaign_desc, c_texts, c_files)
 
-                    # FIX #3: Comprovem si la IA ha retornat un error abans d'accedir a 'campaign'
                     if "error" in res:
                         st.error(f"❌ Error de l'IA: {res['error']}")
                         st.stop()
@@ -94,14 +89,16 @@ def render_chatbot():
                     res['campaign']['kpi_goal'] = kpi_choice
                     st.session_state.full_data = res
                     st.session_state.avis_borrat = avis_b
-                    
+
                     if not res['campaign'].get('vertical'):
                         st.session_state.step = 'MISSING_DATA'
                     else:
                         st.session_state.step = 'REVIEW'
                     st.rerun()
 
-    # --- PANTALLA MISSING_DATA ---
+    # ==========================================================================
+    # PAS 2 (OPCIONAL): VERTICAL DESCONEGUT
+    # ==========================================================================
     elif st.session_state.step == 'MISSING_DATA':
         st.info("💡 L'IA necessita que li donis un cop de mà amb el vertical.")
         with st.form("fix"):
@@ -113,23 +110,168 @@ def render_chatbot():
                 st.session_state.step = 'REVIEW'
                 st.rerun()
 
-    # --- PANTALLA REVIEW ---
+    # ==========================================================================
+    # PAS 3: REVISIÓ DE L'EXTRACCIÓ DE GEMINI
+    # ==========================================================================
     elif st.session_state.step == 'REVIEW':
-        st.title("🔍 Resultats de l'Anàlisi")
-        
+        st.title("🔍 Resultats de l'Extracció (Gemini)")
+
         if st.session_state.avis_borrat:
             st.error("🚨 **COHERÈNCIA VIOLADA**: S'han detectat slots que no corresponen al vertical i s'han buidat automàticament.")
 
-        with st.expander("📊 Veure Dades de Campanya", expanded=True):
+        with st.expander("📊 Dades de Campanya Extretes", expanded=True):
             st.table(pd.DataFrame([st.session_state.full_data['campaign']]))
-        
-        st.subheader("🎨 Creativitats Extractades")
+
+        st.subheader("🎨 Creativitats Extretes")
         st.dataframe(pd.DataFrame(st.session_state.full_data['creatives']), use_container_width=True)
 
         st.divider()
-        c1, c2, c3 = st.columns(3)
-        c1.download_button("📥 Baixar Campaign.csv", pd.DataFrame([st.session_state.full_data['campaign']]).to_csv(index=False), "camp.csv", use_container_width=True)
-        c2.download_button("📥 Baixar Creatives.csv", pd.DataFrame(st.session_state.full_data['creatives']).to_csv(index=False), "crea.csv", use_container_width=True)
-        if c3.button("⬅️ Tornar", use_container_width=True):
+        col_download, col_next, col_back = st.columns(3)
+
+        col_download.download_button(
+            "📥 Baixar Campaign.csv",
+            pd.DataFrame([st.session_state.full_data['campaign']]).to_csv(index=False),
+            "camp.csv",
+            use_container_width=True
+        )
+        col_download.download_button(
+            "📥 Baixar Creatives.csv",
+            pd.DataFrame(st.session_state.full_data['creatives']).to_csv(index=False),
+            "crea.csv",
+            use_container_width=True
+        )
+
+        if col_next.button("🤖 OPTIMITZAR AMB IA →", use_container_width=True, type="primary"):
+            # Carreguem el CSV històric
+            if not os.path.exists(HISTORIC_PATH):
+                st.error(f"❌ No s'ha trobat el CSV d'entrenament a: `{HISTORIC_PATH}`")
+                st.stop()
+
+            with st.spinner("⚙️ Entrenant model XGBoost i optimitzant creativitats..."):
+                try:
+                    df_historic = pd.read_csv(HISTORIC_PATH)
+                    df_orig, df_opt, importancias, kpi, mse = run_xgboost_pipeline(
+                        campaign_data=st.session_state.full_data['campaign'],
+                        creatives_data=st.session_state.full_data['creatives'],
+                        df_historic=df_historic
+                    )
+                    st.session_state.df_original    = df_orig
+                    st.session_state.df_optimitzat  = df_opt
+                    st.session_state.importancias   = importancias
+                    st.session_state.kpi_optimitzat = kpi
+                    st.session_state.mse_model      = mse
+                    st.session_state.step           = 'RESULTS'
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error al model XGBoost: {e}")
+
+        if col_back.button("⬅️ Tornar", use_container_width=True):
+            st.session_state.step = 'CHAT'
+            st.rerun()
+
+    # ==========================================================================
+    # PAS 4: COMPARACIÓ I EXPLICACIÓ DE CANVIS (NOU)
+    # ==========================================================================
+    elif st.session_state.step == 'RESULTS':
+        kpi   = st.session_state.kpi_optimitzat
+        df_or = st.session_state.df_original
+        df_op = st.session_state.df_optimitzat
+        imp   = st.session_state.importancias
+        mse   = st.session_state.mse_model
+
+        st.title(f"✨ Optimització per {kpi}")
+        st.caption(f"Model XGBoost — MSE d'entrenament: `{mse:.6f}`")
+
+        # --- MÈTRIQUES GLOBALS ---
+        pred_col = f'Prediccio_{kpi}'
+        preds = df_op[pred_col]
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("KPI Objectiu", kpi)
+        m2.metric(f"{kpi} Mig Predit", f"{preds.mean():.4f}")
+        m3.metric(f"Millor Creatiu", f"Slot {preds.idxmax() + 1} → {preds.max():.4f}")
+
+        st.divider()
+
+        # --- COMPARACIÓ SLOT A SLOT ---
+        st.subheader("🔍 Comparació de Canvis per Slot")
+        st.caption("🟡 = camp imputat per la IA  |  ✅ = ja estava informat")
+
+        all_cols = FEATURES + CATEGORICAL_FEATURES
+
+        for i in range(len(df_or)):
+            pred_val = df_op[pred_col].iloc[i]
+            with st.expander(f"**Slot {i+1}** — {kpi} predit: `{pred_val:.4f}`", expanded=(i == preds.idxmax())):
+                rows = []
+                for col in all_cols:
+                    val_orig = df_or[col].iloc[i] if col in df_or.columns else None
+                    val_opt  = df_op[col].iloc[i]  if col in df_op.columns  else None
+
+                    # Detectem si ha canviat (camp imputat)
+                    was_null = pd.isna(val_orig) or val_orig is None or str(val_orig).strip() == ''
+                    changed  = was_null and not pd.isna(val_opt)
+
+                    rows.append({
+                        "Atribut": col,
+                        "Valor Original": "—" if was_null else str(val_orig),
+                        "Valor Optimitzat": str(val_opt),
+                        "Canvi IA": "🟡 Imputat" if changed else "✅ Mantingut"
+                    })
+
+                df_comp = pd.DataFrame(rows)
+                # Highlight de files canviades
+                def highlight_row(row):
+                    if row['Canvi IA'] == '🟡 Imputat':
+                        return ['background-color: #fff8e1'] * len(row)
+                    return [''] * len(row)
+
+                st.dataframe(
+                    df_comp.style.apply(highlight_row, axis=1),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+        st.divider()
+
+        # --- TOP ATRIBUTS MÉS INFLUENTS ---
+        st.subheader("📊 Top 10 Atributs més Influents")
+        top_imp = imp.head(10).copy()
+        top_imp['Direcció'] = top_imp['Correlacion'].apply(
+            lambda c: "⬆️ Augmenta KPI" if c > 0 else "⬇️ Redueix KPI"
+        )
+        st.dataframe(
+            top_imp[['Columna_XGB', 'Importancia', 'Correlacion', 'Direcció']],
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.divider()
+
+        # --- EXPORTACIÓ ---
+        st.subheader("📥 Exportar Resultats")
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.download_button(
+            "📄 Creatius Originals",
+            df_or.to_csv(index=False),
+            "creatius_originals.csv",
+            use_container_width=True
+        )
+        c2.download_button(
+            "✨ Creatius Optimitzats",
+            df_op.to_csv(index=False),
+            "creatius_optimitzats.csv",
+            use_container_width=True
+        )
+        c3.download_button(
+            "📊 Importàncies Model",
+            imp.to_csv(index=False),
+            "Import_Corr.csv",
+            use_container_width=True
+        )
+
+        if c4.button("⬅️ Tornar a l'Inici", use_container_width=True):
+            for key in ['df_original', 'df_optimitzat', 'importancias', 'kpi_optimitzat', 'mse_model', 'full_data', 'avis_borrat']:
+                st.session_state.pop(key, None)
             st.session_state.step = 'CHAT'
             st.rerun()

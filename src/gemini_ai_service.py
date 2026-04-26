@@ -40,22 +40,49 @@ def analyze_full_campaign(campaign_text, creative_texts, image_files):
     ### VALORS PERMESOS:
     - Verticals: {config['verticals']}
     - KPI Goals: {list(config['kpi_goals'].keys())}
-    ### ESTRUCTURA DE SORTIDA (JSON PUR):
+        ### ESTRUCTURA DE SORTIDA (JSON PUR, sense cap text addicional):
 {{
       "campaign": {{
-        "vertical": null, "kpi_goal": null, "advertiser_name": null, "app_name": null,
-        "objective": null, "daily_budget_usd": null, "countries": null
+        "vertical": null,
+        "kpi_goal": null,
+        "advertiser_name": null,
+        "app_name": null,
+        "objective": null,
+        "daily_budget_usd": null,
+        "countries": null
       }},
       "creatives": [
         {{
-          "vertical": null, "headline": null, "subhead": null, "cta_text": null,
-          "has_gameplay": null, "text_density": null, "copy_length_chars": null,
-          "language": null, "dominant_color": null
+          "vertical": null,
+          "format": null,
+          "language": null,
+          "theme": null,
+          "hook_type": null,
+          "dominant_color": null,
+          "emotional_tone": null,
+          "advertiser_name": null,
+          "app_name": null,
+          "cta_text": null,
+          "headline": null,
+          "subhead": null,
+          "has_price": null,
+          "has_discount_badge": null,
+          "has_gameplay": null,
+          "has_ugc_style": null,
+          "text_density": null,
+          "copy_length_chars": null,
+          "faces_count": null,
+          "product_count": null,
+          "duration_sec": null,
+          "total_days_active": null,
+          "total_spend_usd": null,
+          "area": null
         }}
       ]
     }}
-    Respon EXCLUSIVAMENT amb el JSON pur.
+    Respon EXCLUSIVAMENT amb el JSON pur. Cap text abans ni després.
     """
+
     content_parts.append(prompt)
 
     try:

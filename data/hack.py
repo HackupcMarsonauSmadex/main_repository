@@ -6,234 +6,209 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 
 # ==============================================================================
-# 1. CARGA DE DATOS
+# ATRIBUTS DEL MODEL
 # ==============================================================================
-df = pd.read_csv('creative_summary.csv')      # Histórico para entrenar
-df2 = pd.read_csv('input_campaign.csv')       # Datos de la campaña (KPI)
-df3 = pd.read_csv('input_creatives.csv')      # Nuevos creativos a evaluar
-
-# ==============================================================================
-# 2. CÁLCULO DE MÉTRICAS DERIVADAS
-# ==============================================================================
-# Área geométrica
-df['area'] = df['width'] * df['height']
-df3['area'] = df3['width'] * df3['height']
-
-# Cálculo del CPA histórico (evitando división por cero)
-df['overall_cpa'] = np.where(
-    df['total_conversions'] > 0, 
-    df['total_spend_usd'] / df['total_conversions'], 
-    0
-)
-
-# ==============================================================================
-# 3. PREPARACIÓN DE ATRIBUTOS
-# ==============================================================================
-features = [
+FEATURES = [
     'total_days_active', 'total_spend_usd', 'area', 'duration_sec',
-    'text_density', 'copy_length_chars', 'faces_count', 'product_count'    
+    'text_density', 'copy_length_chars', 'faces_count', 'product_count'
 ]
 
-categorical_features = [
+CATEGORICAL_FEATURES = [
     'vertical', 'format', 'language', 'theme', 'hook_type', 'dominant_color',
     'emotional_tone', 'advertiser_name', 'app_name', 'cta_text', 'headline',
-    'subhead', 'has_price', 'has_discount_badge', 'has_gameplay', 'has_ugc_style'  
+    'subhead', 'has_price', 'has_discount_badge', 'has_gameplay', 'has_ugc_style'
 ]
 
-# Preparamos la X principal (Datos de entrenamiento)
-X = df[features + categorical_features]
-X_encoded = pd.get_dummies(X, columns=categorical_features, drop_first=False)
-X_encoded = X_encoded.astype(float)
-
-# ==============================================================================
-# 4. IDENTIFICACIÓN DEL KPI OBJETIVO
-# ==============================================================================
-kpi_solicitado = df2['kpi_goal'].iloc[0]
-
-mapa_targets = {
+MAPA_TARGETS = {
     'CTR': 'overall_ctr',
     'CVR': 'overall_cvr',
     'IPM': 'overall_ipm',
     'ROAS': 'overall_roas',
     'CPA': 'overall_cpa'
 }
-target_final = mapa_targets.get(kpi_solicitado)
 
-print(f"🎯 KPI A OPTIMIZAR: {kpi_solicitado} (Columna: {target_final})")
+COLS_HAS = ['has_price', 'has_discount_badge', 'has_gameplay', 'has_ugc_style']
 
-# ==============================================================================
-# 5. ENTRENAMIENTO DEL MODELO (XGBOOST)
-# ==============================================================================
-y = df[target_final]
-
-X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.2, random_state=42)
-
-modelo_xgb = xgb.XGBRegressor(
-    objective='reg:squarederror', 
-    n_estimators=100,             
-    learning_rate=0.1,            
-    max_depth=5,                  
-    random_state=42,
-    n_jobs=-1
-)
-
-modelo_xgb.fit(X_train, y_train)
-predicciones_prueba = modelo_xgb.predict(X_test)
-error = mean_squared_error(y_test, predicciones_prueba)
-print(f" > MSE en prueba: {error:.9f}")
 
 # ==============================================================================
-# 6. EXPORTAR IMPORTANCIAS Y CORRELACIONES
-# ==============================================================================
-importancias_brutas = pd.DataFrame({
-    'Columna_XGB': X_train.columns,
-    'Importancia': modelo_xgb.feature_importances_
-})
-
-correlaciones = X_train.apply(lambda col: col.corr(y_train))
-importancias_brutas['Correlacion'] = importancias_brutas['Columna_XGB'].map(correlaciones)
-importancias_brutas = importancias_brutas.sort_values(by='Importancia', ascending=False)
-
-importancias_brutas.to_csv('Import_Corr.csv', index=False)
-print("✅ Archivo 'Import_Corr.csv' generado con éxito.")
-
-# ==============================================================================
-# 7. MOTOR DE IMPUTACIÓN INTELIGENTE (PRESCRIPTIVO)
+# MOTOR D'IMPUTACIÓ INTEL·LIGENT
 # ==============================================================================
 
-def get_interval(nom_atribut, df_import_corr, df_sencer, features, categorical_features, kpi_solicitado):
-    """
-    Calcula los 5 mejores valores posibles para un atributo vacío
-    basándose en la importancia de XGBoost y su correlación con el KPI.
-    """
-    if nom_atribut in categorical_features:
+def get_interval(nom_atribut, df_import_corr, df_sencer, kpi_solicitado):
+    if nom_atribut in CATEGORICAL_FEATURES:
         prefix = nom_atribut + "_"
         df_filtre = df_import_corr[df_import_corr['Columna_XGB'].str.startswith(prefix, na=False)].copy()
-        
-        if df_filtre.empty: return []
-            
-        # Ajuste de correlación: Si buscamos bajar el CPA, invertimos el impacto
+        if df_filtre.empty:
+            return []
         if kpi_solicitado == 'CPA':
             df_filtre['Score'] = df_filtre['Importancia'] * (df_filtre['Correlacion'] * -1)
         else:
             df_filtre['Score'] = df_filtre['Importancia'] * df_filtre['Correlacion']
-        
         df_filtre = df_filtre.sort_values(by='Score', ascending=False)
         return df_filtre.head(5)['Columna_XGB'].apply(lambda x: x[len(prefix):]).tolist()
 
-    elif nom_atribut in features:
+    elif nom_atribut in FEATURES:
         fila = df_import_corr[df_import_corr['Columna_XGB'] == nom_atribut]
         corr_original = fila['Correlacion'].values[0] if not fila.empty else 0
         corr_ajustada = corr_original * -1 if kpi_solicitado == 'CPA' else corr_original
-        
+
         dades_reals = df_sencer[nom_atribut].dropna()
-        if dades_reals.empty: return [0, 0, 0, 0, 0]
-            
-        # Cálculo de límites y cuartiles
+        if dades_reals.empty:
+            return [0, 0, 0, 0, 0]
+
         minim, maxim = dades_reals.min(), dades_reals.max()
-        q25, q75 = dades_reals.quantile(0.25), dades_reals.quantile(0.75) 
-        
-        # Selección del intervalo óptimo
+        q25, q75 = dades_reals.quantile(0.25), dades_reals.quantile(0.75)
         rang_min, rang_max = (q75, maxim) if corr_ajustada > 0 else (minim, q25)
-            
-        # Generación aleatoria dentro del rango ideal
+
         valors_generats = []
-        es_enter = pd.api.types.is_integer_dtype(dades_reals) 
-        
+        es_enter = pd.api.types.is_integer_dtype(dades_reals)
         for _ in range(5):
             if es_enter:
                 valors_generats.append(random.randint(int(rang_min), int(rang_max)))
             else:
                 valors_generats.append(round(random.uniform(rang_min, rang_max), 2))
-                
         return valors_generats
-    
+
     return []
 
 
-def omplir_forats_inteligentment(df_entrada, importancias_brutas, X, features, categorical_features, kpi_solicitado):
-    """
-    Rellena los NaNs de nuevos creativos cruzando la correlación del modelo
-    para sugerir las mejores decisiones de diseño posibles.
-    """
+def omplir_forats_inteligentment(df_entrada, importancias_brutas, X, kpi_solicitado):
     df_omplir = df_entrada.copy()
-    df_import_corr = importancias_brutas.copy()
-    df_sencer = X.copy()
-    
+
     for col in df_omplir.columns:
-        if col not in features and col not in categorical_features:
-            continue 
-            
+        if col not in FEATURES and col not in CATEGORICAL_FEATURES:
+            continue
+
         nans_idx = df_omplir[df_omplir[col].isna()].index.tolist()
-        num_forats = len(nans_idx)
-        
-        if num_forats == 0:
-            continue 
-            
-        possibles_solucions = get_interval(col, df_import_corr, df_sencer, features, categorical_features, kpi_solicitado)
+        if not nans_idx:
+            continue
+
+        possibles_solucions = get_interval(col, importancias_brutas, X, kpi_solicitado)
         if not possibles_solucions:
-            continue 
-            
-        # Eliminamos duplicados y asignamos valores inteligentemente
-        set_solucions = list(set(possibles_solucions)) if col in categorical_features else possibles_solucions
-        
-        if len(set_solucions) >= num_forats:
-            valors_escollits = random.sample(set_solucions, num_forats)
+            continue
+
+        set_solucions = list(set(possibles_solucions)) if col in CATEGORICAL_FEATURES else possibles_solucions
+
+        if len(set_solucions) >= len(nans_idx):
+            valors_escollits = random.sample(set_solucions, len(nans_idx))
         else:
-            valors_escollits = random.choices(set_solucions, k=num_forats)
-            
+            valors_escollits = random.choices(set_solucions, k=len(nans_idx))
+
         for i, idx in enumerate(nans_idx):
             df_omplir.at[idx, col] = valors_escollits[i]
-            
-    print(f"✨ Procés d'imputació intel·ligent per optimitzar {kpi_solicitado} acabat amb èxit!")
+
     return df_omplir
 
 
-# Ejecución del motor prescriptivo
-x_input_final = omplir_forats_inteligentment(
-     df_entrada=df3[features + categorical_features],
-     importancias_brutas=importancias_brutas,
-     X=X,
-     features=features,
-     categorical_features=categorical_features,
-     kpi_solicitado=kpi_solicitado
- )
-
 # ==============================================================================
-# 8. PREPARACIÓN FINAL Y PREDICCIÓN
+# FUNCIÓ PRINCIPAL: REP ELS DICTS DE GEMINI I RETORNA ELS RESULTATS
 # ==============================================================================
-# Arreglamos los booleanos para compatibilidad
-cols_has = ['has_price', 'has_discount_badge', 'has_gameplay', 'has_ugc_style']
-for col in cols_has:
-    if col in x_input_final.columns:
-        x_input_final[col] = x_input_final[col].replace({True: 1, False: 0, 'True': 1, 'False': 0})
 
-# Dummy encoding y limpieza anti-duplicados (Evita ValueError de XGBoost)
-X_input_encoded = pd.get_dummies(x_input_final, columns=categorical_features)
-X_input_encoded = X_input_encoded.loc[:, ~X_input_encoded.columns.duplicated()]
-columnas_entrenamiento = X_train.columns[~X_train.columns.duplicated()]
+def run_xgboost_pipeline(campaign_data: dict, creatives_data: list, df_historic: pd.DataFrame):
+    """
+    Paràmetres:
+      - campaign_data:  dict amb les dades de campanya (output de Gemini)
+      - creatives_data: llista de dicts amb les creativitats (output de Gemini)
+      - df_historic:    DataFrame amb el CSV d'entrenament (creative_summary.csv)
 
-# Alineamos dimensiones exactas con el modelo entrenado
-X_input_encoded = X_input_encoded.reindex(columns=columnas_entrenamiento, fill_value=0)
-X_input_encoded = X_input_encoded.astype(float)
+    Retorna:
+      - df_original:    DataFrame amb els creatius tal com han entrat
+      - df_optimitzat:  DataFrame amb els creatius optimitzats + prediccions
+      - importancias:   DataFrame amb importàncies i correlacions del model
+      - kpi:            String amb el KPI optimitzat
+      - mse:            Float amb l'error del model
+    """
+    df = df_historic.copy()
 
-# Predicción final de resultados
-pred_input = modelo_xgb.predict(X_input_encoded)
+    # --- Mètriques derivades ---
+    df['area'] = df['width'] * df['height']
+    df['overall_cpa'] = np.where(
+        df['total_conversions'] > 0,
+        df['total_spend_usd'] / df['total_conversions'],
+        0
+    )
 
-# ==============================================================================
-# 9. GUARDADO Y EXPORTACIÓN
-# ==============================================================================
-# Volcamos las sugerencias de la IA en el dataset original
-df3[features + categorical_features] = x_input_final[features + categorical_features]
-df3[f'Prediccion_{kpi_solicitado}'] = pred_input
+    # --- KPI objectiu ---
+    kpi_solicitado = campaign_data.get('kpi_goal', 'CTR')
+    target_col = MAPA_TARGETS.get(kpi_solicitado, 'overall_ctr')
 
-df3.to_csv('output_creatives.csv', index=False)
+    if target_col not in df.columns:
+        raise ValueError(f"Columna '{target_col}' no trobada al CSV d'entrenament.")
 
-print("\n" + "="*40)
-print(f"✅ ¡PROCESO COMPLETADO!")
-print(f"📂 Archivo generado: 'output_creatives.csv'")
-print("-" * 40)
-print("🚀 PREDICCIONES:")
-for index, pred in enumerate(pred_input):
-    print(f" - Creativo {index + 1}: {kpi_solicitado} estimado = {pred:.6f}")
-print("="*40)
+    # --- Preparació X ---
+    X = df[FEATURES + CATEGORICAL_FEATURES].copy()
+    X_encoded = pd.get_dummies(X, columns=CATEGORICAL_FEATURES, drop_first=False).astype(float)
+    y = df[target_col]
+
+    # --- Entrenament XGBoost ---
+    X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.2, random_state=42)
+
+    model = xgb.XGBRegressor(
+        objective='reg:squarederror',
+        n_estimators=100,
+        learning_rate=0.1,
+        max_depth=5,
+        random_state=42,
+        n_jobs=-1
+    )
+    model.fit(X_train, y_train)
+    preds_test = model.predict(X_test)
+    mse = mean_squared_error(y_test, preds_test)
+
+    # --- Importàncies i correlacions ---
+    importancias = pd.DataFrame({
+        'Columna_XGB': X_train.columns,
+        'Importancia': model.feature_importances_
+    })
+    correlacions = X_train.apply(lambda col: col.corr(y_train))
+    importancias['Correlacion'] = importancias['Columna_XGB'].map(correlacions)
+    importancias = importancias.sort_values(by='Importancia', ascending=False)
+
+    # --- Construïm df_creatius des dels dicts de Gemini ---
+    df3 = pd.DataFrame(creatives_data)
+
+    # Afegim àrea si tenim width/height; si no, posem NaN
+    if 'width' in df3.columns and 'height' in df3.columns:
+        df3['area'] = df3['width'] * df3['height']
+    else:
+        df3['area'] = np.nan
+
+    # Assegurem que totes les columnes necessàries existeixen
+    for col in FEATURES + CATEGORICAL_FEATURES:
+        if col not in df3.columns:
+            df3[col] = np.nan
+
+    # Guardem còpia original ABANS d'imputar
+    df_original = df3[FEATURES + CATEGORICAL_FEATURES].copy()
+
+    # Normalitzem booleans
+    for col in COLS_HAS:
+        if col in df3.columns:
+            df3[col] = df3[col].replace({True: 1, False: 0, 'True': 1, 'False': 0, 1: 1, 0: 0})
+
+    # --- Imputació intel·ligent ---
+    df_input_omplert = omplir_forats_inteligentment(
+        df_entrada=df3[FEATURES + CATEGORICAL_FEATURES],
+        importancias_brutas=importancias,
+        X=X,
+        kpi_solicitado=kpi_solicitado
+    )
+
+    # Normalitzem booleans post-imputació
+    for col in COLS_HAS:
+        if col in df_input_omplert.columns:
+            df_input_omplert[col] = df_input_omplert[col].replace({True: 1, False: 0, 'True': 1, 'False': 0})
+
+    # --- Encoding i predicció ---
+    X_input_encoded = pd.get_dummies(df_input_omplert, columns=CATEGORICAL_FEATURES)
+    X_input_encoded = X_input_encoded.loc[:, ~X_input_encoded.columns.duplicated()]
+    columnes_train = X_train.columns[~X_train.columns.duplicated()]
+    X_input_encoded = X_input_encoded.reindex(columns=columnes_train, fill_value=0).astype(float)
+
+    prediccions = model.predict(X_input_encoded)
+
+    # --- Construïm df_optimitzat ---
+    df_optimitzat = df_input_omplert.copy()
+    df_optimitzat[f'Prediccio_{kpi_solicitado}'] = prediccions
+
+    return df_original, df_optimitzat, importancias, kpi_solicitado, mse
