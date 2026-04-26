@@ -1,4 +1,4 @@
-Columna_XGB,Importancia,Correlacion
+XGB_Column,Importance,Correlation
 vertical_gaming,0.75177306,0.9054288636418685
 vertical_ecommerce,0.08155861,-0.36564115980658873
 vertical_travel,0.045957096,-0.40477394692057916
