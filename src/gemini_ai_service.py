@@ -25,7 +25,6 @@ def analyze_full_campaign(campaign_text, creative_texts, image_files):
         content_parts.append(f"--- SLOT {i+1} ---")
         if creative_texts[i]:
             content_parts.append(f"Text: {creative_texts[i]}")
-        # FIX #2: Image.open correcte, sense hyperlink
         if image_files[i]:
             content_parts.append(Image.open(image_files[i]))
 
@@ -37,6 +36,10 @@ def analyze_full_campaign(campaign_text, creative_texts, image_files):
     3. **Slots**: Genera EXACTAMENT 6 objectes a la llista 'creatives'.
     4. **Idiomes**: Codi ISO 2 lletres [es, ca, ja...].
     5. **Booleans**: 1, 0 o null.
+    6. **Fija los valores de text_density y area a null quan analitztis les descripcions**
+    7. **Cuando definas la campaign configuration no pongas nada en los campos de creative, y viceversa, menos el vertical**
+    8. **Cuando obtengas un dominant_color dale un nombre genérico (red, blue, green...) en vez de un código hexadecimal**
+    9. **Campaign**: Basándote en el contexto del campaign descrito por el usuario, intenta inferir y completar todos los campos posibles del objeto 'campaign': advertiser_name, app_name, objective, daily_budget_usd, countries. Usa el contexto proporcionado para inferir valores razonables cuando no haya información explícita.
     ### VALORS PERMESOS:
     - Verticals: {config['verticals']}
     - KPI Goals: {list(config['kpi_goals'].keys())}
@@ -86,7 +89,6 @@ def analyze_full_campaign(campaign_text, creative_texts, image_files):
     content_parts.append(prompt)
 
     try:
-        # FIX #4: Nom de model correcte
         response = client.models.generate_content(
             model="gemini-flash-latest",
             contents=content_parts
@@ -100,7 +102,7 @@ def analyze_full_campaign(campaign_text, creative_texts, image_files):
         avis_borrat = False
         v_camp = data['campaign'].get('vertical')
 
-        # LÒGICA DE POLICIA: si el vertical de la creativa no coincideix, la borrem
+        #If the vertical of the campaign is defined, all creatives must match it. If not, we will erase the creative data but keep the vertical to allow partial analysis
         if v_camp:
             for idx, c in enumerate(data['creatives']):
                 v_creative = c.get('vertical')
