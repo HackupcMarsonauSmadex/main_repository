@@ -1,7 +1,7 @@
-total_days_active,total_spend_usd,width,height,duration_sec,text_density,copy_length_chars,faces_count,product_count,vertical,format,language,theme,hook_type,dominant_color,emotional_tone,advertiser_name,app_name,cta_text,headline,subhead,has_price,has_discount_badge,has_gameplay,has_ugc_style,area,Prediccion_CPA
-14.0,500.5,1080.0,1920.0,1.0,0.15,120.0,2.0,1.0,gaming,video,en,action,gameplay,red,excited,PixelForge,PixelForge Legends,Play Now,Epic Battles,1,True,False,True,False,2073600.0,3.4117365
-1.0,1200.0,1080.0,1080.0,30.0,1.0,85.0,1.0,2.0,gaming,image,en,fantasy,character,blue,mysterious,PixelForge,PixelForge Legends,Install,Join the Quest,Free to play,1,False,False,False,1166400.0,5.341256
-7.0,300.0,720.0,1280.0,15.0,0.05,50.0,1.0,1.0,gaming,video,es,1,challenge,1,funny,PixelForge,PixelForge Legends,Download,¿Aceptas el reto?,Solo para valientes,False,False,True,True,921600.0,3.7633848
-21.0,1.0,1080.0,1920.0,45.0,0.2,1.0,0.0,3.0,gaming,video,en,strategy,1,green,tense,PixelForge,PixelForge Legends,Play Free,Build your empire,Dominate the world,False,True,True,False,2073600.0,5.043359
-3.0,150.75,1080.0,1080.0,10.0,0.1,40.0,1.0,1.0,1,image,es,action,story,black,1,PixelForge,PixelForge Legends,Jugar,Acción sin límite,Mejor juego 2026,True,True,False,False,1166400.0,15.065536
-10.0,800.0,,,60.0,0.3,200.0,3.0,0.0,gaming,video,1,puzzle,gameplay,yellow,happy,PixelForge,PixelForge Legends,1,Solve this!,Can you beat level 10?,False,False,True,True,1.0,3.9433022
+total_days_active,total_spend_usd,width,height,duration_sec,text_density,copy_length_chars,faces_count,product_count,vertical,format,language,theme,hook_type,dominant_color,emotional_tone,advertiser_name,app_name,cta_text,headline,subhead,has_price,has_discount_badge,has_gameplay,has_ugc_style,area,Prediccion_CVR
+14.0,500.5,1080.0,1920.0,12.0,0.15,120.0,2.0,1.0,gaming,video,en,action,gameplay,red,excited,PixelForge,PixelForge Legends,Play Now,Epic Battles,No ads in first week,1,0,1,0,2073600.0,0.18439062
+68.0,1200.0,1080.0,1080.0,30.0,0.21,85.0,1.0,2.0,gaming,image,en,fantasy,character,blue,mysterious,PixelForge,PixelForge Legends,Install,Join the Quest,Free to play,1,0,0,0,1166400.0,0.19238064
+7.0,300.0,720.0,1280.0,15.0,0.05,50.0,0.0,1.0,gaming,video,es,fantasy,challenge,purple,funny,PixelForge,PixelForge Legends,Download,¿Aceptas el reto?,Solo para valientes,0,0,1,1,921600.0,0.18913126
+21.0,84898.18,1080.0,1920.0,45.0,0.2,19.0,0.0,3.0,gaming,video,en,strategy,challenge,green,tense,PixelForge,PixelForge Legends,Play Free,Build your empire,Dominate the world,0,1,1,0,2073600.0,0.20735444
+3.0,150.75,1080.0,1080.0,10.0,0.1,40.0,1.0,0.0,food_delivery,image,es,action,story,black,urgent,PixelForge,PixelForge Legends,Jugar,Acción sin límite,Mejor juego 2026,1,1,0,0,1166400.0,0.09235581
+10.0,800.0,,,60.0,0.3,200.0,3.0,0.0,gaming,video,en,puzzle,gameplay,yellow,happy,PixelForge,PixelForge Legends,Claim reward,Solve this!,Can you beat level 10?,0,0,1,1,230400.0,0.1949762
