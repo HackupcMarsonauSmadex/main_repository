@@ -41,15 +41,15 @@ def render_chatbot():
             col_kpi, col_info = st.columns([1, 1])
             
             with col_kpi:
+                # FIX #1: kpi_goals és un dict, usem les claus explícitament
                 kpi_choice = st.selectbox(
                     "🎯 Escull el KPI objectiu:",
-                    options=config['kpi_goals'],
+                    options=list(config['kpi_goals'].keys()),
                     index=None,
                     placeholder="Selecciona mètrica..."
                 )
             
             with col_info:
-                # La info només s'ensenya si l'usuari vol (Expander discret)
                 with st.expander("❓ Què hauria d'escollir?"):
                     for k, v in kpi_details.items():
                         st.markdown(f"- {v}")
@@ -61,7 +61,6 @@ def render_chatbot():
         
         c_texts, c_files = [], []
         
-        # Creem 3 columnes per a la primera fila d'slots
         row1 = st.columns(3)
         for i in range(3):
             with row1[i]:
@@ -70,7 +69,6 @@ def render_chatbot():
                     c_texts.append(st.text_area(f"Descripció S{i+1}", key=f"t{i}", height=80, label_visibility="collapsed", placeholder="Descripció..."))
                     c_files.append(st.file_uploader(f"Imatge {i+1}", key=f"f{i}", label_visibility="collapsed"))
 
-        # Creem 3 columnes per a la segona fila d'slots
         row2 = st.columns(3)
         for i in range(3, 6):
             with row2[i-3]:
@@ -79,7 +77,7 @@ def render_chatbot():
                     c_texts.append(st.text_area(f"Descripció S{i+1}", key=f"t{i}", height=80, label_visibility="collapsed", placeholder="Descripció..."))
                     c_files.append(st.file_uploader(f"Imatge {i+1}", key=f"f{i}", label_visibility="collapsed"))
 
-        st.markdown("###") # Espaiat
+        st.markdown("###")
         
         if st.button("🚀 ANALITZAR CAMPANYA", use_container_width=True, type="primary"):
             if not campaign_desc or kpi_choice is None:
@@ -87,6 +85,12 @@ def render_chatbot():
             else:
                 with st.spinner("Auditant coherència..."):
                     res, avis_b = analyze_full_campaign(campaign_desc, c_texts, c_files)
+
+                    # FIX #3: Comprovem si la IA ha retornat un error abans d'accedir a 'campaign'
+                    if "error" in res:
+                        st.error(f"❌ Error de l'IA: {res['error']}")
+                        st.stop()
+
                     res['campaign']['kpi_goal'] = kpi_choice
                     st.session_state.full_data = res
                     st.session_state.avis_borrat = avis_b
@@ -104,7 +108,8 @@ def render_chatbot():
             v = st.selectbox("Vertical real:", options=config['verticals'])
             if st.form_submit_button("Confirmar"):
                 st.session_state.full_data['campaign']['vertical'] = v
-                for c in st.session_state.full_data['creatives']: c['vertical'] = v
+                for c in st.session_state.full_data['creatives']:
+                    c['vertical'] = v
                 st.session_state.step = 'REVIEW'
                 st.rerun()
 

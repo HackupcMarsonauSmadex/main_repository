@@ -2,7 +2,7 @@
     "verticals": ["gaming", "e-commerce", "fintech", "entertainment", "health", "travel"],
     "kpi_goals": {
         "CPA": "Cost Per Action",
-        "ROAS": "Return on Ad spend",
+        "ROAS": "Return on Ad Spend",
         "CTR": "Click Through Rate",
         "IPM": "Installs Per Mille",
         "CVR": "Conversion Rate"
