@@ -1,9 +1,149 @@
-# MAIN REPOSITORY
+# 🎯 Smadex Creative Intelligence Platform
 
-In this repository we have three main files that we should know.
+An intelligent ad campaign analysis and optimization platform powered by machine learning. This project extracts, analyzes, and optimizes creative assets for advertising campaigns using Gemini AI for data extraction and XGBoost for performance prediction.
 
-The first one is the **app.py**. This file is the one that have all the frontend logitic, with an library of python named *Streamlit*.
+---
 
-Secondly, we have the source folder. This folder is needed to have all the backend logistic. The IA, the controllers (the data_utils should have all the functions used to talk between frontend and backend), etc.
+## 🚀 Features
 
-Finally, we have the data folder. This is where the .csv (or any other storage files) will be. We will consume this in order to have the informations we need.
+- **Campaign Data Extraction**: Uses Gemini AI to extract and complete campaign metadata from user descriptions
+- **Creative Analysis**: Analyzes up to 6 creative variations per campaign
+- **Smart Imputation**: Intelligent handling of missing data using feature importance and correlation analysis
+- **Performance Prediction**: XGBoost models predict key performance indicators (CTR, CVR, IPM, ROAS, CPA)
+- **Fatigue Detection**: Identifies when creatives start to lose effectiveness over time
+- **Interactive Dashboard**: Streamlit-based UI for campaign configuration and results visualization
+
+---
+
+## 📁 Project Structure
+
+```
+main_repository/
+├── app.py                    # Main Streamlit application entry point
+├── requirements.txt          # Python dependencies
+├── README.md                 # This file
+├── data/                     # Dataset files (CSV)
+│   ├── creative_summary.csv  # Pre-aggregated creative metrics
+│   ├── creative_daily_country_os_stats.csv  # Daily performance data
+│   ├── advertisers.csv       # Advertiser metadata
+│   ├── campaigns.csv         # Campaign setup data
+│   ├── creatives.csv         # Creative metadata
+│   └── data_dictionary.csv   # Column definitions
+├── src/                      # Backend source code
+│   ├── gemini_ai_service.py # Gemini AI integration for data extraction
+│   ├── hack_en.py           # XGBoost ML pipeline and fatigue detection
+│   ├── styles.py            # Custom UI styling
+│   └── utils/
+│       └── ranges.json      # Configuration ranges
+└── vistes/                   # View layer
+    └── chatbot.py           # Main chatbot interface
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Category | Technology |
+|----------|------------|
+| Frontend | Streamlit |
+| AI/ML | Google Gemini, XGBoost |
+| Data Processing | Pandas, NumPy |
+| Visualization | Streamlit native components |
+
+---
+
+## ⚙️ Installation
+
+1. **Clone the repository**
+
+2. **Install dependencies:**
+
+```bash
+pip install -r requirements.txt
+```
+
+3. **Create a `.env` file with your Gemini API key:**
+
+```
+GEMINI_API_TOKEN=your_api_key_here
+```
+
+---
+
+## 🎯 Usage
+
+1. **Run the application:**
+
+```bash
+streamlit run app.py
+```
+
+2. **Click "Start Analysis"** on the home page
+
+3. **Enter campaign context** and select target KPI
+
+4. **Upload up to 6 creative variations** (descriptions and images)
+
+5. **Click "Analyze Campaign"** to extract data
+
+6. **Review extracted data** and click "Optimize Campaign"
+
+7. **View predictions** and performance analysis
+
+---
+
+## 📊 Supported KPIs
+
+| KPI | Description |
+|-----|-------------|
+| **CTR** | Click Through Rate - Ad attractiveness (clicks) |
+| **CVR** | Conversion Rate - Conversion funnel effectiveness |
+| **IPM** | Installs Per Mille - Gaming effectiveness (installs/1k) |
+| **ROAS** | Return on Ad Spend - Economic return on investment |
+| **CPA** | Cost Per Action - Cost per sale/registration |
+
+---
+
+## 🔧 Key Modules
+
+### `src/gemini_ai_service.py`
+- Extracts campaign and creative data from user inputs using Gemini AI
+- Validates vertical consistency across creatives
+- Returns structured JSON with all metadata
+
+### `src/hack_en.py`
+- `compute_fatigue()`: Detects when creatives lose effectiveness based on CTR/CPA trends
+- `smart_nan_imputation()`: Fills missing values using importance-weighted correlations
+- `run_xgboost_pipeline()`: Main ML pipeline for optimization
+
+### `vistes/chatbot.py`
+- Multi-step wizard interface for campaign analysis
+- Displays predictions, comparisons, and export options
+
+---
+
+## 📈 Dataset
+
+The project uses a synthetic AdTech dataset with:
+
+- 36 advertisers
+- 180 campaigns
+- 1,080 creatives
+- 192,315 daily performance records
+
+### Join Keys
+
+```
+advertisers.advertiser_id = campaigns.advertiser_id
+campaigns.campaign_id = creatives.campaign_id
+creatives.creative_id = creative_daily_country_os_stats.creative_id
+campaigns.campaign_id = creative_daily_country_os_stats.campaign_id
+```
+
+See [data/README.md](data/README.md) for detailed dataset documentation.
+
+---
+
+## 📝 License
+
+This project is created for the Smadex Hackathon challenge.
