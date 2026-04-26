@@ -38,7 +38,8 @@ def analyze_full_campaign(campaign_text, creative_texts, image_files):
     5. **Booleans**: 1, 0 o null.
     6. **Fija los valores de text_density y area a null quan analitztis les descripcions**
     7. **Cuando definas la campaign configuration no pongas nada en los campos de creative, y viceversa, menos el vertical**
-    8. **Cuando obtengas un dominant_color dale un nombre genérico (red, blue, green...) en vez de un código hexadecimal**    
+    8. **Cuando obtengas un dominant_color dale un nombre genérico (red, blue, green...) en vez de un código hexadecimal**
+    9. **Campaign**: Basándote en el contexto del campaign descrito por el usuario, intenta inferir y completar todos los campos posibles del objeto 'campaign': advertiser_name, app_name, objective, daily_budget_usd, countries. Usa el contexto proporcionado para inferir valores razonables cuando no haya información explícita.
     ### VALORS PERMESOS:
     - Verticals: {config['verticals']}
     - KPI Goals: {list(config['kpi_goals'].keys())}

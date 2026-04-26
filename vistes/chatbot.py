@@ -195,6 +195,11 @@ def render_chatbot():
 
         st.title(f"Optimization Results: {kpi}")
 
+        # Campaign info at the top
+        campaign_data = st.session_state.full_data.get('campaign', {})
+        with st.expander("Campaign Configuration", expanded=True):
+            st.table(pd.DataFrame([campaign_data]))
+
         # Model metrics
         mse_cols = st.columns(2)
         mse_cols[0].caption(f"Model MSE: {mse_kpi:.6f}")
